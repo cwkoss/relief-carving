@@ -11,6 +11,7 @@ checkpoints/
 external_jobs/
 cache/
 images/
+gui_temp/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

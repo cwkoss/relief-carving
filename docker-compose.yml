@@ -12,6 +12,7 @@ services:
       - ./images:/app/images  # Mount for input images
       - ./output:/app/output  # Mount for output results
       - ./cache/torch_hub:/root/.cache/torch/hub  # Cache model weights locally
+      - ./gui_temp:/app/zoedepth/gui_temp  # GUI temporary files
     ports:
       - "8080:8080"  # For potential web interface
     environment:
