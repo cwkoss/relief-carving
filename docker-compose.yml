@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  zoedepth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zoedepth:latest
+    container_name: zoedepth_container
+    volumes:
+      - ./:/app/zoedepth
+      - ./images:/app/images  # Mount for input images
+      - ./output:/app/output  # Mount for output results
+      - ./cache/torch_hub:/root/.cache/torch/hub  # Cache model weights locally
+    ports:
+      - "8080:8080"  # For potential web interface
+    environment:
+      - PYTHONPATH=/app/zoedepth
+    stdin_open: true
+    tty: true
+    # Enable GPU support if available
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
