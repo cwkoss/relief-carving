@@ -51,6 +51,27 @@ def apply_bilateral_filter(depth_map, d=9, sigma_color=75, sigma_space=75):
     filtered = cv2.bilateralFilter(depth_8bit, d, sigma_color, sigma_space)
     return filtered.astype(float) / 255.0
 
+def adjust_shadow_crush(depth_map, crush_amount=0.0):
+    """
+    Crush shadows while preserving highlights (near-white detail)
+
+    This increases the dynamic range for light areas by washing out dark greys.
+
+    Args:
+        depth_map: Input depth map (0-1 range)
+        crush_amount: How much to crush shadows (0.0 = no effect, 0.5 = heavy crush)
+                     Values below crush_amount become black, rest is rescaled
+
+    Returns:
+        Depth map with crushed shadows
+    """
+    if crush_amount <= 0.0:
+        return depth_map
+
+    # Remap: anything below crush_amount becomes 0, rest scales to fill 0-1
+    crushed = np.clip((depth_map - crush_amount) / (1.0 - crush_amount), 0, 1)
+    return crushed
+
 def main():
     image_path = sys.argv[1] if len(sys.argv) > 1 else "gui_temp/input.png"
     depth_path = sys.argv[2] if len(sys.argv) > 2 else "gui_temp/depth.npy"
@@ -63,10 +84,12 @@ def main():
     bilateral_d = int(sys.argv[7]) if len(sys.argv) > 7 else 9
     bilateral_color = float(sys.argv[8]) if len(sys.argv) > 8 else 75.0
     bilateral_space = float(sys.argv[9]) if len(sys.argv) > 9 else 75.0
+    shadow_crush = float(sys.argv[10]) if len(sys.argv) > 10 else 0.0
 
     print(f"Applying post-processing...")
     print(f"Parameters: detail={detail_strength}, clahe_clip={clahe_clip}, clahe_tile={clahe_tile}")
     print(f"            bilateral_d={bilateral_d}, color={bilateral_color}, space={bilateral_space}")
+    print(f"            shadow_crush={shadow_crush}")
 
     # Load cached depth map
     print(f"Loading depth map from {depth_path}...")
@@ -155,13 +178,30 @@ def main():
 
     cv2.imwrite(str(debug_dir / "06_bilateral.png"), (final_enhanced * 255).astype(np.uint8))
 
+    # Apply shadow crush to increase dynamic range for highlights
+    if shadow_crush > 0.0:
+        print(f"Applying shadow crush (amount={shadow_crush})...")
+        print(f"  Before crush: range=[{final_enhanced.min():.3f}, {final_enhanced.max():.3f}]")
+        final_enhanced = adjust_shadow_crush(final_enhanced, crush_amount=shadow_crush)
+        print(f"  After crush: range=[{final_enhanced.min():.3f}, {final_enhanced.max():.3f}]")
+
+        # Re-mask after crush
+        if alpha_mask is not None:
+            final_enhanced = final_enhanced * alpha_mask
+            print(f"  Re-masked after crush: transparent pixels at 0.0")
+
+        cv2.imwrite(str(debug_dir / "07_shadow_crush.png"), (final_enhanced * 255).astype(np.uint8))
+    else:
+        # Skip shadow crush, just copy to step 7
+        cv2.imwrite(str(debug_dir / "07_shadow_crush.png"), (final_enhanced * 255).astype(np.uint8))
+
     # Final mask application for absolutely clean edges
     if alpha_mask is not None:
         print(f"Final alpha mask application for clean edges...")
         final_enhanced = final_enhanced * alpha_mask
-        cv2.imwrite(str(debug_dir / "07_final_masked.png"), (final_enhanced * 255).astype(np.uint8))
+        cv2.imwrite(str(debug_dir / "08_final_masked.png"), (final_enhanced * 255).astype(np.uint8))
     else:
-        cv2.imwrite(str(debug_dir / "07_final_masked.png"), (final_enhanced * 255).astype(np.uint8))
+        cv2.imwrite(str(debug_dir / "08_final_masked.png"), (final_enhanced * 255).astype(np.uint8))
 
     # Save outputs
     print(f"Saving to {output_path}...")

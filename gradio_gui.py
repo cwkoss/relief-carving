@@ -81,16 +81,16 @@ def run_depth_estimation(input_image, progress=gr.Progress()):
     except Exception as e:
         return f"❌ Error: {str(e)}", False, ""
 
-def apply_processing(detail_strength, clahe_clip, clahe_tile, bilateral_d, bilateral_color, bilateral_space, depth_cached, progress=gr.Progress()):
+def apply_processing(detail_strength, clahe_clip, clahe_tile, bilateral_d, bilateral_color, bilateral_space, shadow_crush, depth_cached, progress=gr.Progress()):
     """Apply post-processing to cached depth map - this is FAST!"""
 
     if not depth_cached:
-        return None, "❌ Please upload an image first to run depth estimation", None, None, None, None, None, None, None, ""
+        return None, "❌ Please upload an image first to run depth estimation", None, None, None, None, None, None, None, None, ""
 
     # Check if depth map exists
     depth_path = Path("gui_temp") / "depth.npy"
     if not depth_path.exists():
-        return None, "❌ Depth map not found. Please upload an image first.", None, None, None, None, None, None, None, ""
+        return None, "❌ Depth map not found. Please upload an image first.", None, None, None, None, None, None, None, None, ""
 
     try:
         progress(0, desc="Applying post-processing...")
@@ -112,7 +112,8 @@ def apply_processing(detail_strength, clahe_clip, clahe_tile, bilateral_d, bilat
              "python", "apply_postprocessing.py",
              docker_input, docker_depth, docker_output,
              str(detail_strength), str(clahe_clip), str(clahe_tile),
-             str(bilateral_d), str(bilateral_color), str(bilateral_space)],
+             str(bilateral_d), str(bilateral_color), str(bilateral_space),
+             str(shadow_crush)],
             capture_output=True,
             text=True,
             timeout=30  # Much shorter timeout since no depth estimation
@@ -150,7 +151,8 @@ def apply_processing(detail_strength, clahe_clip, clahe_tile, bilateral_d, bilat
             ("04_detail_added.png", "4. High-Freq Detail Added"),
             ("05_clahe.png", "5. CLAHE Applied"),
             ("06_bilateral.png", "6. Bilateral Filter"),
-            ("07_final_masked.png", "7. Final (Re-masked)")
+            ("07_shadow_crush.png", "7. Shadow Crush"),
+            ("08_final_masked.png", "8. Final (Re-masked)")
         ]
 
         for filename, label in debug_files:
@@ -171,14 +173,15 @@ def apply_processing(detail_strength, clahe_clip, clahe_tile, bilateral_d, bilat
             debug_images.get("4. High-Freq Detail Added"),
             debug_images.get("5. CLAHE Applied"),
             debug_images.get("6. Bilateral Filter"),
-            debug_images.get("7. Final (Re-masked)"),
+            debug_images.get("7. Shadow Crush"),
+            debug_images.get("8. Final (Re-masked)"),
             console_output
         )
 
     except subprocess.TimeoutExpired:
-        return None, "❌ Error: Post-processing timed out (>30 seconds)", None, None, None, None, None, None, None, ""
+        return None, "❌ Error: Post-processing timed out (>30 seconds)", None, None, None, None, None, None, None, None, ""
     except Exception as e:
-        return None, f"❌ Error: {str(e)}", None, None, None, None, None, None, None, ""
+        return None, f"❌ Error: {str(e)}", None, None, None, None, None, None, None, None, ""
 
 def initialize_system():
     """Initialize Docker on startup"""
@@ -241,6 +244,13 @@ with gr.Blocks(title="Relief Carving Depth Map Generator") as demo:
                     info="Higher = larger smoothing area"
                 )
 
+            with gr.Accordion("Shadow Crush (Highlight Detail)", open=True):
+                shadow_crush = gr.Slider(
+                    minimum=0.0, maximum=0.5, value=0.0, step=0.05,
+                    label="Crush Amount",
+                    info="Wash out dark greys to increase detail in highlights (0=none, 0.3=heavy)"
+                )
+
             process_btn = gr.Button("Apply Processing (Fast!)", variant="primary", size="lg")
 
         with gr.Column():
@@ -271,6 +281,13 @@ with gr.Blocks(title="Relief Carving Depth Map Generator") as demo:
         - Lower values = preserve more detail but keep artifacts
         - Higher values = smoother but may lose fine detail
         - These defaults remove spiky texture while preserving edges
+
+        **Shadow Crush (0.0 recommended, adjust as needed)**
+        - 0.0 = No crushing (default)
+        - 0.1-0.2 = Subtle - slightly more highlight detail
+        - 0.3+ = Aggressive - washes out shadows, maximum highlight detail
+        - Use this to increase dynamic range for fine details near white
+        - Dark greys below the crush amount become pure black
         """)
 
     gr.Markdown("""
@@ -301,7 +318,8 @@ with gr.Blocks(title="Relief Carving Depth Map Generator") as demo:
             debug_img5 = gr.Image(type="numpy", label="5. CLAHE Applied", format="png")
             debug_img6 = gr.Image(type="numpy", label="6. Bilateral Filter", format="png")
         with gr.Row():
-            debug_img7 = gr.Image(type="numpy", label="7. Final (Re-masked)", format="png")
+            debug_img7 = gr.Image(type="numpy", label="7. Shadow Crush", format="png")
+            debug_img8 = gr.Image(type="numpy", label="8. Final (Re-masked)", format="png")
 
     # Event handlers
 
@@ -315,8 +333,8 @@ with gr.Blocks(title="Relief Carving Depth Map Generator") as demo:
     # Apply post-processing when button clicked
     process_btn.click(
         fn=apply_processing,
-        inputs=[detail_strength, clahe_clip, clahe_tile, bilateral_d, bilateral_color, bilateral_space, depth_cached],
-        outputs=[output_image, output_status, debug_img1, debug_img2, debug_img3, debug_img4, debug_img5, debug_img6, debug_img7, console_log]
+        inputs=[detail_strength, clahe_clip, clahe_tile, bilateral_d, bilateral_color, bilateral_space, shadow_crush, depth_cached],
+        outputs=[output_image, output_status, debug_img1, debug_img2, debug_img3, debug_img4, debug_img5, debug_img6, debug_img7, debug_img8, console_log]
     )
 
     # Initialize on load
