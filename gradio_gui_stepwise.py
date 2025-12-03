@@ -374,14 +374,24 @@ def run_from_step(start_step, input_image, state,
                   enable_1, enable_2, enable_3, enable_4, enable_5, enable_6, enable_7, enable_8, enable_9,
                   step3_crush, detail_strength, step5_crush, clahe_clip, clahe_tile, step6_crush,
                   bilateral_d, bilateral_color, bilateral_space, step7_crush, step8_crush,
+                  # Existing images to preserve
+                  existing_img1, existing_img2, existing_img3, existing_img4,
+                  existing_img5, existing_img6, existing_img7, existing_img8,
                   progress=gr.Progress()):
-    """Run from a given step through all subsequent enabled steps"""
+    """Run from a given step through all subsequent enabled steps, preserving existing images"""
 
     console_log = ""
     enabled_steps = [enable_1, enable_2, enable_3, enable_4, enable_5, enable_6, enable_7, enable_8, enable_9]
 
-    # Initialize output images
-    img1 = img2 = img3 = img4 = img5 = img6 = img7 = img8 = None
+    # Start with existing images - only update ones we process
+    img1 = existing_img1
+    img2 = existing_img2
+    img3 = existing_img3
+    img4 = existing_img4
+    img5 = existing_img5
+    img6 = existing_img6
+    img7 = existing_img7
+    img8 = existing_img8
 
     # Count enabled steps from start_step onwards
     total_steps = sum(enabled_steps[start_step-1:])
@@ -601,13 +611,16 @@ with gr.Blocks(title="Relief Carving - Stepwise Processing") as demo:
     with gr.Row():
         run_all_btn = gr.Button("⚡ Run All Steps (with current settings)", variant="primary", size="lg")
 
-    # Common inputs for all buttons
+    # Common inputs for all buttons (includes existing images to preserve)
     common_inputs = [
         input_image, pipeline_state,
         enable_step1, enable_step2, enable_step3, enable_step4, enable_step5, enable_step6, enable_step7, enable_step8, enable_step9,
         step3_crush, detail_strength, step5_crush,
         clahe_clip, clahe_tile, step6_crush,
-        bilateral_d, bilateral_color, bilateral_space, step7_crush, step8_crush
+        bilateral_d, bilateral_color, bilateral_space, step7_crush, step8_crush,
+        # Pass existing images to preserve them
+        step1_output, step2_output, step3_output, step4_output,
+        step5_output, step6_output, step7_output, step8_output
     ]
 
     common_outputs = [
@@ -618,71 +631,71 @@ with gr.Blocks(title="Relief Carving - Stepwise Processing") as demo:
 
     # Event handlers - each button runs from its step through all enabled subsequent steps
     step1_btn.click(
-        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8:
-            run_from_step(1, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8),
+        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8:
+            run_from_step(1, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8),
         inputs=common_inputs,
         outputs=common_outputs
     )
 
     step2_btn.click(
-        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8:
-            run_from_step(2, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8),
+        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8:
+            run_from_step(2, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8),
         inputs=common_inputs,
         outputs=common_outputs
     )
 
     step3_btn.click(
-        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8:
-            run_from_step(3, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8),
+        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8:
+            run_from_step(3, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8),
         inputs=common_inputs,
         outputs=common_outputs
     )
 
     step4_btn.click(
-        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8:
-            run_from_step(4, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8),
+        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8:
+            run_from_step(4, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8),
         inputs=common_inputs,
         outputs=common_outputs
     )
 
     step5_btn.click(
-        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8:
-            run_from_step(5, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8),
+        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8:
+            run_from_step(5, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8),
         inputs=common_inputs,
         outputs=common_outputs
     )
 
     step6_btn.click(
-        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8:
-            run_from_step(6, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8),
+        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8:
+            run_from_step(6, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8),
         inputs=common_inputs,
         outputs=common_outputs
     )
 
     step7_btn.click(
-        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8:
-            run_from_step(7, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8),
+        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8:
+            run_from_step(7, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8),
         inputs=common_inputs,
         outputs=common_outputs
     )
 
     step8_btn.click(
-        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8:
-            run_from_step(8, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8),
+        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8:
+            run_from_step(8, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8),
         inputs=common_inputs,
         outputs=common_outputs
     )
 
     step9_btn.click(
-        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8:
-            run_from_step(9, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8),
+        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8:
+            run_from_step(9, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8),
         inputs=common_inputs,
         outputs=common_outputs
     )
 
     run_all_btn.click(
-        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8:
-            run_from_step(1, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8),
+        fn=lambda img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8:
+            run_from_step(1, img, state, e1,e2,e3,e4,e5,e6,e7,e8,e9, c3,ds,c5,cc,ct,c6,bd,bco,bsp,c7,c8, i1,i2,i3,i4,i5,i6,i7,i8),
         inputs=common_inputs,
         outputs=common_outputs
     )
