@@ -99,13 +99,16 @@ def main():
     cv2.imwrite(str(debug_dir / "01_depth_raw.png"), (depth_norm * 255).astype(np.uint8))
 
     # Apply alpha mask to RAW depth (before inversion)
+    # KEY: Set transparent areas to WHITE (1.0) so they become BLACK (0) after inversion
+    # This prevents CLAHE/bilateral filters from creating halos at transparent edges
     if alpha_mask is not None:
-        print(f"Applying alpha mask to raw depth...")
+        print(f"Applying alpha mask to raw depth (transparent = WHITE before inversion)...")
         print(f"  Before masking: depth range=[{depth_norm.min():.3f}, {depth_norm.max():.3f}]")
-        depth_masked_raw = depth_norm * alpha_mask
+        # Formula: depth_norm where opaque, 1.0 (white) where transparent
+        depth_masked_raw = depth_norm * alpha_mask + (1.0 - alpha_mask)
         print(f"  After masking: depth range=[{depth_masked_raw.min():.3f}, {depth_masked_raw.max():.3f}]")
-        pixels_zeroed = (depth_masked_raw == 0).sum() - (depth_norm == 0).sum()
-        print(f"  Pixels set to zero by mask: {pixels_zeroed}")
+        pixels_set_white = ((depth_masked_raw == 1.0) & (alpha_mask == 0)).sum()
+        print(f"  Pixels set to WHITE (1.0) by mask: {pixels_set_white}")
         cv2.imwrite(str(debug_dir / "02_depth_raw_masked.png"), (depth_masked_raw * 255).astype(np.uint8))
     else:
         print(f"No alpha mask - skipping masking step")
@@ -124,19 +127,37 @@ def main():
     high_freq = gray_norm - gray_blur
     enhanced_base = depth_inverted + (high_freq * detail_strength)
     enhanced_base = normalize_array(enhanced_base)
+
+    # Re-mask after normalization to keep transparent areas at 0.0 (black)
+    if alpha_mask is not None:
+        enhanced_base = enhanced_base * alpha_mask
+        print(f"  Re-masked after detail: transparent pixels at 0.0")
+
     cv2.imwrite(str(debug_dir / "04_detail_added.png"), (enhanced_base * 255).astype(np.uint8))
 
     print(f"Applying CLAHE (clip={clahe_clip}, tile={clahe_tile})...")
     clahe_enhanced = apply_clahe_refined(enhanced_base, clip_limit=clahe_clip, tile_size=clahe_tile)
+
+    # Re-mask after CLAHE to prevent edge bleeding
+    if alpha_mask is not None:
+        clahe_enhanced = clahe_enhanced * alpha_mask
+        print(f"  Re-masked after CLAHE: transparent pixels at 0.0")
+
     cv2.imwrite(str(debug_dir / "05_clahe.png"), (clahe_enhanced * 255).astype(np.uint8))
 
     print(f"Applying bilateral filter (d={bilateral_d}, color={bilateral_color}, space={bilateral_space})...")
     final_enhanced = apply_bilateral_filter(clahe_enhanced, d=bilateral_d, sigma_color=bilateral_color, sigma_space=bilateral_space)
+
+    # Re-mask after bilateral to prevent edge bleeding
+    if alpha_mask is not None:
+        final_enhanced = final_enhanced * alpha_mask
+        print(f"  Re-masked after bilateral: transparent pixels at 0.0")
+
     cv2.imwrite(str(debug_dir / "06_bilateral.png"), (final_enhanced * 255).astype(np.uint8))
 
-    # Re-apply alpha mask at the end to ensure clean edges
+    # Final mask application for absolutely clean edges
     if alpha_mask is not None:
-        print(f"Re-applying alpha mask to final output for clean edges...")
+        print(f"Final alpha mask application for clean edges...")
         final_enhanced = final_enhanced * alpha_mask
         cv2.imwrite(str(debug_dir / "07_final_masked.png"), (final_enhanced * 255).astype(np.uint8))
     else:
