@@ -111,8 +111,8 @@ def step_2_apply_alpha_mask(state, progress=gr.Progress()):
     except Exception as e:
         return None, f"Error: {str(e)}", state, ""
 
-def step_3_invert(state, progress=gr.Progress()):
-    """Step 3: Invert depth (for relief carving)"""
+def step_3_inverted_crush(crush_amount, state, progress=gr.Progress()):
+    """Step 3: Inverted crush (crush bright areas to white before inversion)"""
     if not state or state.get("step", 0) < 2:
         return None, "Please run Step 2 first", state, ""
 
@@ -122,14 +122,53 @@ def step_3_invert(state, progress=gr.Progress()):
         # Load masked depth
         depth_masked = np.array(state["masked"])
 
+        # Apply inverted crush: bright areas (above 1-crush) become white
+        if crush_amount > 0:
+            # Formula: output = min(input / (1 - crush), 1.0)
+            # This crushes bright areas to white while expanding dark/mid tones
+            crushed = np.clip(depth_masked / (1.0 - crush_amount), 0, 1)
+            console = f"Inverted crush applied (amount={crush_amount}): values above {1.0-crush_amount:.2f} → white"
+        else:
+            crushed = depth_masked
+            console = "No inverted crush (amount=0)"
+
+        # Re-mask with alpha
+        alpha_path = temp_dir / "alpha_mask.npy"
+        if alpha_path.exists():
+            alpha_mask = np.load(alpha_path)
+            crushed = crushed * alpha_mask + (1.0 - alpha_mask)
+
+        # Save and display
+        depth_img = (crushed * 255).astype(np.uint8)
+        np.save(temp_dir / "step3_inv_crush.npy", crushed)
+
+        state["step"] = 3
+        state["inv_crushed"] = crushed.tolist()
+
+        return depth_img, "✓ Inverted crush applied", state, console
+
+    except Exception as e:
+        return None, f"Error: {str(e)}", state, ""
+
+def step_4_invert(state, progress=gr.Progress()):
+    """Step 4: Invert depth (for relief carving)"""
+    if not state or state.get("step", 0) < 3:
+        return None, "Please run Step 3 first", state, ""
+
+    try:
+        temp_dir = Path("gui_temp")
+
+        # Load inverted-crushed depth
+        depth_crushed = np.array(state["inv_crushed"])
+
         # Invert
-        depth_inverted = 1.0 - depth_masked
+        depth_inverted = 1.0 - depth_crushed
 
         # Save and display
         depth_img = (depth_inverted * 255).astype(np.uint8)
-        np.save(temp_dir / "step3_inverted.npy", depth_inverted)
+        np.save(temp_dir / "step4_inverted.npy", depth_inverted)
 
-        state["step"] = 3
+        state["step"] = 4
         state["inverted"] = depth_inverted.tolist()
 
         return depth_img, "✓ Depth inverted", state, "Inverted: closer = darker (will be raised)"
@@ -137,10 +176,10 @@ def step_3_invert(state, progress=gr.Progress()):
     except Exception as e:
         return None, f"Error: {str(e)}", state, ""
 
-def step_4_high_freq_detail(detail_strength, crush_amount, state, progress=gr.Progress()):
-    """Step 4: Add high-frequency detail from original image"""
-    if not state or state.get("step", 0) < 3:
-        return None, "Please run Step 3 first", state, ""
+def step_5_high_freq_detail(detail_strength, crush_amount, state, progress=gr.Progress()):
+    """Step 5: Add high-frequency detail from original image"""
+    if not state or state.get("step", 0) < 4:
+        return None, "Please run Step 5 first", state, ""
 
     try:
         temp_dir = Path("gui_temp")
@@ -174,9 +213,9 @@ def step_4_high_freq_detail(detail_strength, crush_amount, state, progress=gr.Pr
 
         # Save and display
         depth_img = (enhanced * 255).astype(np.uint8)
-        np.save(temp_dir / "step4_detail.npy", enhanced)
+        np.save(temp_dir / "step5_detail.npy", enhanced)
 
-        state["step"] = 4
+        state["step"] = 5
         state["detail"] = enhanced.tolist()
 
         return depth_img, f"✓ High-freq detail added", state, console
@@ -184,10 +223,10 @@ def step_4_high_freq_detail(detail_strength, crush_amount, state, progress=gr.Pr
     except Exception as e:
         return None, f"Error: {str(e)}", state, ""
 
-def step_5_clahe(clahe_clip, clahe_tile, crush_amount, state, progress=gr.Progress()):
-    """Step 5: Apply CLAHE contrast enhancement"""
-    if not state or state.get("step", 0) < 4:
-        return None, "Please run Step 4 first", state, ""
+def step_6_clahe(clahe_clip, clahe_tile, crush_amount, state, progress=gr.Progress()):
+    """Step 6: Apply CLAHE contrast enhancement"""
+    if not state or state.get("step", 0) < 5:
+        return None, "Please run Step 5 first", state, ""
 
     try:
         temp_dir = Path("gui_temp")
@@ -215,9 +254,9 @@ def step_5_clahe(clahe_clip, clahe_tile, crush_amount, state, progress=gr.Progre
 
         # Save and display
         depth_img = (enhanced * 255).astype(np.uint8)
-        np.save(temp_dir / "step5_clahe.npy", enhanced)
+        np.save(temp_dir / "step6_clahe.npy", enhanced)
 
-        state["step"] = 5
+        state["step"] = 6
         state["clahe"] = enhanced.tolist()
 
         return depth_img, f"✓ CLAHE applied", state, console
@@ -225,10 +264,10 @@ def step_5_clahe(clahe_clip, clahe_tile, crush_amount, state, progress=gr.Progre
     except Exception as e:
         return None, f"Error: {str(e)}", state, ""
 
-def step_6_bilateral(bilateral_d, bilateral_color, bilateral_space, crush_amount, state, progress=gr.Progress()):
-    """Step 6: Apply bilateral filter"""
-    if not state or state.get("step", 0) < 5:
-        return None, "Please run Step 5 first", state, ""
+def step_7_bilateral(bilateral_d, bilateral_color, bilateral_space, crush_amount, state, progress=gr.Progress()):
+    """Step 7: Apply bilateral filter"""
+    if not state or state.get("step", 0) < 6:
+        return None, "Please run Step 6 first", state, ""
 
     try:
         temp_dir = Path("gui_temp")
@@ -256,9 +295,9 @@ def step_6_bilateral(bilateral_d, bilateral_color, bilateral_space, crush_amount
 
         # Save and display
         depth_img = (enhanced * 255).astype(np.uint8)
-        np.save(temp_dir / "step6_bilateral.npy", enhanced)
+        np.save(temp_dir / "step7_bilateral.npy", enhanced)
 
-        state["step"] = 6
+        state["step"] = 7
         state["bilateral"] = enhanced.tolist()
 
         return depth_img, f"✓ Bilateral filter applied", state, console
@@ -266,10 +305,10 @@ def step_6_bilateral(bilateral_d, bilateral_color, bilateral_space, crush_amount
     except Exception as e:
         return None, f"Error: {str(e)}", state, ""
 
-def step_7_final_crush(crush_amount, state, progress=gr.Progress()):
-    """Step 7: Final shadow crush"""
-    if not state or state.get("step", 0) < 6:
-        return None, "Please run Step 6 first", state, ""
+def step_8_final_crush(crush_amount, state, progress=gr.Progress()):
+    """Step 8: Final shadow crush"""
+    if not state or state.get("step", 0) < 7:
+        return None, "Please run Step 7 first", state, ""
 
     try:
         temp_dir = Path("gui_temp")
@@ -293,9 +332,9 @@ def step_7_final_crush(crush_amount, state, progress=gr.Progress()):
 
         # Save and display
         depth_img = (enhanced * 255).astype(np.uint8)
-        np.save(temp_dir / "step7_crush.npy", enhanced)
+        np.save(temp_dir / "step8_crush.npy", enhanced)
 
-        state["step"] = 7
+        state["step"] = 8
         state["final"] = enhanced.tolist()
 
         return depth_img, f"✓ Final crush applied", state, console
@@ -303,10 +342,10 @@ def step_7_final_crush(crush_amount, state, progress=gr.Progress()):
     except Exception as e:
         return None, f"Error: {str(e)}", state, ""
 
-def step_8_save_output(state, progress=gr.Progress()):
-    """Step 8: Save final output"""
-    if not state or state.get("step", 0) < 7:
-        return "Please run Step 7 first", ""
+def step_9_save_output(state, progress=gr.Progress()):
+    """Step 9: Save final output"""
+    if not state or state.get("step", 0) < 8:
+        return "Please run Step 8 first", ""
 
     try:
         temp_dir = Path("gui_temp")
@@ -331,58 +370,63 @@ def step_8_save_output(state, progress=gr.Progress()):
     except Exception as e:
         return f"Error: {str(e)}", ""
 
-def run_all_steps(input_image, detail_strength, step4_crush, clahe_clip, clahe_tile, step5_crush,
-                  bilateral_d, bilateral_color, bilateral_space, step6_crush, step7_crush, progress=gr.Progress()):
+def run_all_steps(input_image, step3_crush, detail_strength, step5_crush, clahe_clip, clahe_tile, step6_crush,
+                  bilateral_d, bilateral_color, bilateral_space, step7_crush, step8_crush, progress=gr.Progress()):
     """Run all steps sequentially with current settings"""
 
     state = {}
     console_log = ""
 
     # Step 1
-    progress(0/8, desc="Step 1: Depth Estimation...")
+    progress(0/9, desc="Step 1: Depth Estimation...")
     img1, status1, state, log1 = step_1_depth_estimation(input_image, progress)
     console_log += log1 + "\n\n"
     if img1 is None:
-        return None, None, None, None, None, None, None, status1, state, console_log
+        return None, None, None, None, None, None, None, None, status1, state, console_log
 
     # Step 2
-    progress(1/8, desc="Step 2: Alpha Mask...")
+    progress(1/9, desc="Step 2: Alpha Mask...")
     img2, status2, state, log2 = step_2_apply_alpha_mask(state, progress)
     console_log += log2 + "\n\n"
 
     # Step 3
-    progress(2/8, desc="Step 3: Invert...")
-    img3, status3, state, log3 = step_3_invert(state, progress)
+    progress(2/9, desc="Step 3: Inverted Crush...")
+    img3, status3, state, log3 = step_3_inverted_crush(step3_crush, state, progress)
     console_log += log3 + "\n\n"
 
     # Step 4
-    progress(3/8, desc="Step 4: High-Freq Detail...")
-    img4, status4, state, log4 = step_4_high_freq_detail(detail_strength, step4_crush, state, progress)
+    progress(3/9, desc="Step 4: Invert...")
+    img4, status4, state, log4 = step_4_invert(state, progress)
     console_log += log4 + "\n\n"
 
     # Step 5
-    progress(4/8, desc="Step 5: CLAHE...")
-    img5, status5, state, log5 = step_5_clahe(clahe_clip, clahe_tile, step5_crush, state, progress)
+    progress(4/9, desc="Step 5: High-Freq Detail...")
+    img5, status5, state, log5 = step_5_high_freq_detail(detail_strength, step5_crush, state, progress)
     console_log += log5 + "\n\n"
 
     # Step 6
-    progress(5/8, desc="Step 6: Bilateral...")
-    img6, status6, state, log6 = step_6_bilateral(bilateral_d, bilateral_color, bilateral_space, step6_crush, state, progress)
+    progress(5/9, desc="Step 6: CLAHE...")
+    img6, status6, state, log6 = step_6_clahe(clahe_clip, clahe_tile, step6_crush, state, progress)
     console_log += log6 + "\n\n"
 
     # Step 7
-    progress(6/8, desc="Step 7: Final Crush...")
-    img7, status7, state, log7 = step_7_final_crush(step7_crush, state, progress)
+    progress(6/9, desc="Step 7: Bilateral...")
+    img7, status7, state, log7 = step_7_bilateral(bilateral_d, bilateral_color, bilateral_space, step7_crush, state, progress)
     console_log += log7 + "\n\n"
 
     # Step 8
-    progress(7/8, desc="Step 8: Saving...")
-    save_status, save_log = step_8_save_output(state, progress)
+    progress(7/9, desc="Step 8: Final Crush...")
+    img8, status8, state, log8 = step_8_final_crush(step8_crush, state, progress)
+    console_log += log8 + "\n\n"
+
+    # Step 9
+    progress(8/9, desc="Step 9: Saving...")
+    save_status, save_log = step_9_save_output(state, progress)
     console_log += save_log + "\n\n"
 
     progress(1.0, desc="Complete!")
 
-    return (img1, img2, img3, img4, img5, img6, img7,
+    return (img1, img2, img3, img4, img5, img6, img7, img8,
             "✓ All steps complete! Output saved.", state, console_log)
 
 # Build Gradio Interface
@@ -423,67 +467,78 @@ with gr.Blocks(title="Relief Carving - Stepwise Processing") as demo:
         with gr.Column(scale=2):
             step2_output = gr.Image(type="numpy", label="2. Alpha Masked (transparent=white)", format="png")
 
-    # Step 3: Invert
+    # Step 3: Inverted Crush
     with gr.Row():
         with gr.Column(scale=1):
-            gr.Markdown("### Step 3: Invert Depth")
-            gr.Markdown("*For relief carving: closer = darker = raised*")
-            step3_btn = gr.Button("▶ Invert Depth", variant="secondary")
+            gr.Markdown("### Step 3: Inverted Crush")
+            gr.Markdown("*Crush bright areas to white (before inversion)*")
+            step3_crush = gr.Slider(0.0, 0.5, 0.0, step=0.05, label="Inverted Crush Amount")
+            step3_btn = gr.Button("▶ Apply Inverted Crush", variant="secondary")
             step3_status = gr.Textbox(label="Status", lines=1, interactive=False)
         with gr.Column(scale=2):
-            step3_output = gr.Image(type="numpy", label="3. Inverted (transparent=black)", format="png")
+            step3_output = gr.Image(type="numpy", label="3. Inverted Crush (bright→white)", format="png")
 
-    # Step 4: High-Freq Detail
+    # Step 4: Invert
     with gr.Row():
         with gr.Column(scale=1):
-            gr.Markdown("### Step 4: Add Surface Detail")
-            detail_strength = gr.Slider(0.0, 1.0, 0.2, step=0.05, label="Detail Strength")
-            step4_crush = gr.Slider(0.0, 0.5, 0.0, step=0.05, label="Crush Amount (optional)")
-            step4_btn = gr.Button("▶ Add Detail", variant="secondary")
+            gr.Markdown("### Step 4: Invert Depth")
+            gr.Markdown("*For relief carving: closer = darker = raised*")
+            step4_btn = gr.Button("▶ Invert Depth", variant="secondary")
             step4_status = gr.Textbox(label="Status", lines=1, interactive=False)
         with gr.Column(scale=2):
-            step4_output = gr.Image(type="numpy", label="4. With High-Freq Detail", format="png")
+            step4_output = gr.Image(type="numpy", label="4. Inverted (transparent=black)", format="png")
 
-    # Step 5: CLAHE
+    # Step 5: High-Freq Detail
     with gr.Row():
         with gr.Column(scale=1):
-            gr.Markdown("### Step 5: CLAHE Contrast")
-            clahe_clip = gr.Slider(1.0, 5.0, 2.5, step=0.1, label="Clip Limit")
-            clahe_tile = gr.Slider(8, 64, 16, step=8, label="Tile Size")
+            gr.Markdown("### Step 5: Add Surface Detail")
+            detail_strength = gr.Slider(0.0, 1.0, 0.2, step=0.05, label="Detail Strength")
             step5_crush = gr.Slider(0.0, 0.5, 0.0, step=0.05, label="Crush Amount (optional)")
-            step5_btn = gr.Button("▶ Apply CLAHE", variant="secondary")
+            step5_btn = gr.Button("▶ Add Detail", variant="secondary")
             step5_status = gr.Textbox(label="Status", lines=1, interactive=False)
         with gr.Column(scale=2):
-            step5_output = gr.Image(type="numpy", label="5. CLAHE Enhanced", format="png")
+            step5_output = gr.Image(type="numpy", label="5. With High-Freq Detail", format="png")
 
-    # Step 6: Bilateral Filter
+    # Step 6: CLAHE
     with gr.Row():
         with gr.Column(scale=1):
-            gr.Markdown("### Step 6: Bilateral Smoothing")
+            gr.Markdown("### Step 6: CLAHE Contrast")
+            clahe_clip = gr.Slider(1.0, 5.0, 2.5, step=0.1, label="Clip Limit")
+            clahe_tile = gr.Slider(8, 64, 16, step=8, label="Tile Size")
+            step6_crush = gr.Slider(0.0, 0.5, 0.0, step=0.05, label="Crush Amount (optional)")
+            step6_btn = gr.Button("▶ Apply CLAHE", variant="secondary")
+            step6_status = gr.Textbox(label="Status", lines=1, interactive=False)
+        with gr.Column(scale=2):
+            step6_output = gr.Image(type="numpy", label="6. CLAHE Enhanced", format="png")
+
+    # Step 7: Bilateral Filter
+    with gr.Row():
+        with gr.Column(scale=1):
+            gr.Markdown("### Step 7: Bilateral Smoothing")
             bilateral_d = gr.Slider(5, 15, 9, step=2, label="Filter Diameter")
             bilateral_color = gr.Slider(10, 150, 75, step=5, label="Color Sigma")
             bilateral_space = gr.Slider(10, 150, 75, step=5, label="Space Sigma")
-            step6_crush = gr.Slider(0.0, 0.5, 0.0, step=0.05, label="Crush Amount (optional)")
-            step6_btn = gr.Button("▶ Apply Bilateral", variant="secondary")
-            step6_status = gr.Textbox(label="Status", lines=1, interactive=False)
-        with gr.Column(scale=2):
-            step6_output = gr.Image(type="numpy", label="6. Bilateral Filtered", format="png")
-
-    # Step 7: Final Crush
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### Step 7: Final Shadow Crush")
-            step7_crush = gr.Slider(0.0, 0.5, 0.0, step=0.05, label="Final Crush Amount")
-            step7_btn = gr.Button("▶ Apply Final Crush", variant="secondary")
+            step7_crush = gr.Slider(0.0, 0.5, 0.0, step=0.05, label="Crush Amount (optional)")
+            step7_btn = gr.Button("▶ Apply Bilateral", variant="secondary")
             step7_status = gr.Textbox(label="Status", lines=1, interactive=False)
         with gr.Column(scale=2):
-            step7_output = gr.Image(type="numpy", label="7. Final Crushed", format="png")
+            step7_output = gr.Image(type="numpy", label="7. Bilateral Filtered", format="png")
 
-    # Step 8: Save
+    # Step 8: Final Crush
+    with gr.Row():
+        with gr.Column(scale=1):
+            gr.Markdown("### Step 8: Final Shadow Crush")
+            step8_crush = gr.Slider(0.0, 0.5, 0.0, step=0.05, label="Final Crush Amount")
+            step8_btn = gr.Button("▶ Apply Final Crush", variant="secondary")
+            step8_status = gr.Textbox(label="Status", lines=1, interactive=False)
+        with gr.Column(scale=2):
+            step8_output = gr.Image(type="numpy", label="8. Final Crushed", format="png")
+
+    # Step 9: Save
     gr.Markdown("---")
     with gr.Row():
-        step8_btn = gr.Button("💾 Save Output (16-bit PNG)", variant="primary", size="lg")
-        step8_status = gr.Textbox(label="Save Status", lines=2, interactive=False)
+        step9_btn = gr.Button("💾 Save Output (16-bit PNG)", variant="primary", size="lg")
+        step9_status = gr.Textbox(label="Save Status", lines=2, interactive=False)
 
     # Global controls
     gr.Markdown("---")
@@ -504,53 +559,59 @@ with gr.Blocks(title="Relief Carving - Stepwise Processing") as demo:
     )
 
     step3_btn.click(
-        fn=step_3_invert,
-        inputs=[pipeline_state],
+        fn=step_3_inverted_crush,
+        inputs=[step3_crush, pipeline_state],
         outputs=[step3_output, step3_status, pipeline_state, console_output]
     )
 
     step4_btn.click(
-        fn=step_4_high_freq_detail,
-        inputs=[detail_strength, step4_crush, pipeline_state],
+        fn=step_4_invert,
+        inputs=[pipeline_state],
         outputs=[step4_output, step4_status, pipeline_state, console_output]
     )
 
     step5_btn.click(
-        fn=step_5_clahe,
-        inputs=[clahe_clip, clahe_tile, step5_crush, pipeline_state],
+        fn=step_5_high_freq_detail,
+        inputs=[detail_strength, step5_crush, pipeline_state],
         outputs=[step5_output, step5_status, pipeline_state, console_output]
     )
 
     step6_btn.click(
-        fn=step_6_bilateral,
-        inputs=[bilateral_d, bilateral_color, bilateral_space, step6_crush, pipeline_state],
+        fn=step_6_clahe,
+        inputs=[clahe_clip, clahe_tile, step6_crush, pipeline_state],
         outputs=[step6_output, step6_status, pipeline_state, console_output]
     )
 
     step7_btn.click(
-        fn=step_7_final_crush,
-        inputs=[step7_crush, pipeline_state],
+        fn=step_7_bilateral,
+        inputs=[bilateral_d, bilateral_color, bilateral_space, step7_crush, pipeline_state],
         outputs=[step7_output, step7_status, pipeline_state, console_output]
     )
 
     step8_btn.click(
-        fn=step_8_save_output,
+        fn=step_8_final_crush,
+        inputs=[step8_crush, pipeline_state],
+        outputs=[step8_output, step8_status, pipeline_state, console_output]
+    )
+
+    step9_btn.click(
+        fn=step_9_save_output,
         inputs=[pipeline_state],
-        outputs=[step8_status, console_output]
+        outputs=[step9_status, console_output]
     )
 
     run_all_btn.click(
         fn=run_all_steps,
         inputs=[
-            input_image, detail_strength, step4_crush,
-            clahe_clip, clahe_tile, step5_crush,
-            bilateral_d, bilateral_color, bilateral_space, step6_crush,
-            step7_crush
+            input_image, step3_crush, detail_strength, step5_crush,
+            clahe_clip, clahe_tile, step6_crush,
+            bilateral_d, bilateral_color, bilateral_space, step7_crush,
+            step8_crush
         ],
         outputs=[
             step1_output, step2_output, step3_output, step4_output,
-            step5_output, step6_output, step7_output,
-            step8_status, pipeline_state, console_output
+            step5_output, step6_output, step7_output, step8_output,
+            step9_status, pipeline_state, console_output
         ]
     )
 
